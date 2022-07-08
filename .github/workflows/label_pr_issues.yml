@@ -29,7 +29,9 @@ jobs:
           for issue in $( echo "$PR_TITLE $PR_BODY" | grep -o '#[0-9][0-9]*' ); do
             res="$( curl -sH "Authorization: token $GITHUB_TOKEN" "$REPO_URL/issues/${issue#"#"}" )"
 
-            if [ -n "$res" ] && [ "$( echo "$res" | python3 -c "import sys, json; data = json.load(sys.stdin); print('node_id' in data and 'state' in data and data['node_id'].find('I_') == 0 and data['state'] == 'open')" )" = "True" ]; then
+            if [ -n "$res" ] && [ "$( echo "$res" | python3 -c "import sys, json; data = json.load(sys.stdin); print(
+                  'node_id' in data and 'state' in data and data['node_id'].find('I_') == 0 and data['state'] == 'open'
+                )" )" = "True" ]; then
               issue_found="$issue"
               break
             fi
@@ -43,7 +45,7 @@ jobs:
               "$REPO_URL/issues" \
               -H "Content-Type: application/json" \
               -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{\"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because PR #$PR_NUMBER is not referenced to an open issue.\"}"
+              -d "{ \"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because PR #$PR_NUMBER is not referenced to an open issue.\" }"
 
             curl \
               -sX POST \
