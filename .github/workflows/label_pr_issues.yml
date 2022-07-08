@@ -29,7 +29,11 @@ jobs:
           for issue in $( echo "$PR_TITLE $PR_BODY" | grep -o '#[0-9][0-9]*' ); do
             res="$( curl -sH "Authorization: token $GITHUB_TOKEN" "$REPO_URL/issues/${issue#"#"}" )"
 
-            if [ -n "$res" ] && [ "$( echo "$res" | python3 -c "import sys, json; data = json.load(sys.stdin); print('node_id' in data and 'state' in data and data['node_id'].find('I_') == 0 and data['state'] == 'open')" )" = "True" ]; then
+            if [ -n "$res" ] && [ "$( echo "$res" | python3 -c "
+                  import sys, json
+                  data = json.load(sys.stdin)
+                  print('node_id' in data and 'state' in data and data['node_id'].find('I_') == 0 and data['state'] == 'open')
+                " )" = "True" ]; then
               issue_found="$issue"
               break
             fi
