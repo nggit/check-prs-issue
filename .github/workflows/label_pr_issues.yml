@@ -36,16 +36,14 @@ jobs:
             echo "OK: PR $PR_NUMBER is referenced to an open issue: $issue_found"
           else
             curl \
-              -so /dev/null \
-              -X POST \
+              -sX POST \
               "$REPO_URL/issues" \
               -H "Content-Type: application/json" \
               -H "Authorization: token $GITHUB_TOKEN" \
               -d "{\"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because PR #$PR_NUMBER is not referenced to an open issue.\"}"
 
             curl \
-              -so /dev/null \
-              -X POST \
+              -sX POST \
               "$PR_COMMENTS_URL" \
               -H "Content-Type: application/json" \
               -H "Authorization: token $GITHUB_TOKEN" \
