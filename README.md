@@ -1,2 +1,2 @@
 # check-prs-issue
-Test.
+Hello.
