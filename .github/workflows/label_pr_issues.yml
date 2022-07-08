@@ -1,0 +1,56 @@
+name: Label PRs and Issues
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+  workflow_dispatch:
+
+jobs:
+  check-prs-issue:
+    name: Check PRs issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add a comment to a PR and create an issue if the PR does not reference an open issue
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
+          PR_COMMENTS_URL: ${{ github.event.pull_request.comments_url }}
+          REPO_URL: ${{ github.event.pull_request.base.repo.url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          issue_found=""
+
+          for issue in $( echo "$PR_TITLE $PR_BODY" | grep -o '#[0-9][0-9]*' ); do
+            res="$( curl -sH "Authorization: token $GITHUB_TOKEN" "$REPO_URL/issues/${issue#"#"}" )"
+
+            if [ -n "$res" ] && [ "$( echo "$res" | python3 -c "import sys, json; data = json.load(sys.stdin); print('node_id' in data and 'state' in data and data['node_id'].find('I_') == 0 and data['state'] == 'open')" )" = "True" ]; then
+              issue_found="$issue"
+              break
+            fi
+          done
+
+          if [ -n "$issue_found" ]; then
+            echo "OK: PR $PR_NUMBER is referenced to an open issue: $issue_found"
+          else
+            curl \
+              -so /dev/null \
+              -X POST \
+              "$REPO_URL/issues" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -d "{\"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because PR #$PR_NUMBER is not referenced to an open issue.\"}"
+
+            curl \
+              -so /dev/null \
+              -X POST \
+              "$PR_COMMENTS_URL" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -d "{ \"body\": \"Error: Hi @$PR_USER, please reference your PR ($PR_NUMBER) to an open issue. You can fix this by editing your PR body (comments).\" }"
+
+            echo "Failed: PR $PR_NUMBER is not referenced to an open issue" >&2
+            exit 1
+          fi
