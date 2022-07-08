@@ -10,6 +10,8 @@ jobs:
   check-prs-issue:
     name: Check PRs issue
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: Add a comment to a PR and create an issue if the PR does not reference an open issue
         env:
