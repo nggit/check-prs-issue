@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Add a comment to a PR and create an issue if the PR does not reference an open issue
         env:
