@@ -5,7 +5,6 @@ on:
       - opened
       - edited
   workflow_dispatch:
-
 jobs:
   check-prs-issue:
     name: Check PRs issue
@@ -40,6 +39,7 @@ jobs:
           if [ -n "$issue_found" ]; then
             echo "OK: PR $PR_NUMBER is referenced to an open issue: $issue_found"
           else
+            echo "Creating an issue..."
             curl \
               -sX POST \
               "$REPO_URL/issues" \
@@ -47,6 +47,7 @@ jobs:
               -H "Authorization: token $GITHUB_TOKEN" \
               -d "{ \"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because PR #$PR_NUMBER is not referenced to an open issue.\" }"
 
+            echo "Creating a comment..."
             curl \
               -sX POST \
               "$PR_COMMENTS_URL" \
