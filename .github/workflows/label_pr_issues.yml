@@ -26,9 +26,9 @@ jobs:
           issue_found=""
 
           for issue in $( echo "$PR_TITLE $PR_BODY" | grep -o '#[0-9][0-9]*' ); do
-            res="$( curl -sH "Authorization: token $GITHUB_TOKEN" "$REPO_URL/issues/${issue#"#"}" )"
+            check_issue="$( curl -sH "Authorization: token $GITHUB_TOKEN" "$REPO_URL/issues/${issue#"#"}" )"
 
-            if [ -n "$res" ] && [ "$( echo "$res" | python3 -c "import sys, json; data = json.load(sys.stdin); print(
+            if [ -n "$check_issue" ] && [ "$( echo "$check_issue" | python3 -c "import sys, json; data = json.load(sys.stdin); print(
                   'node_id' in data and 'state' in data and data['node_id'].find('I_') == 0 and data['state'] == 'open'
                 )" )" = "True" ]; then
               issue_found="$issue"
@@ -39,13 +39,29 @@ jobs:
           if [ -n "$issue_found" ]; then
             echo "OK: PR $PR_NUMBER is referenced to an open issue: $issue_found"
           else
+            echo "Failed: PR $PR_NUMBER is not referenced to an open issue" >&2
             echo "Creating an issue..."
-            curl \
+
+            create_issue="$( curl \
               -sX POST \
               "$REPO_URL/issues" \
               -H "Content-Type: application/json" \
               -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{ \"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because PR #$PR_NUMBER is not referenced to an open issue.\" }"
+              -d "{ \"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because PR #$PR_NUMBER is not referenced to an open issue.\" }" \
+            )"
+
+            if [ -n "$create_issue" ]; then
+              ISSUE_NUMBER="$( echo "$create_issue" | python3 -c "import sys, json; data = json.load(sys.stdin); 'number' in data and print(
+                data['number']
+              )" )"
+            fi
+
+            if [ -n "$ISSUE_NUMBER" ]; then
+              echo "Issue number $ISSUE_NUMBER created"
+            else
+              echo "Error: Failed to create an issue" >&2
+              exit 1
+            fi
 
             echo "Creating a comment..."
             curl \
@@ -53,8 +69,22 @@ jobs:
               "$PR_COMMENTS_URL" \
               -H "Content-Type: application/json" \
               -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{ \"body\": \"Error: Hi @$PR_USER, please reference your PR ($PR_NUMBER) to an open issue. You can fix this by editing your PR body (comments).\" }"
+              -d "{ \"body\": \"Error: Hi @$PR_USER, please reference your PR ($PR_NUMBER) to an open issue. You can fix this by editing your PR body (comments).\
+              \\nI opened an issue #$ISSUE_NUMBER because of this and you should reference it too.\" }"
 
-            echo "Failed: PR $PR_NUMBER is not referenced to an open issue" >&2
+            if [ -n "$PR_BODY" ]; then
+              PR_BODY="$( printf "%s" "$PR_BODY" | python3 -c "import sys, json; print(json.dumps(sys.stdin.read())[1:-1])" )"
+            else
+              PR_BODY="Please edit this."
+            fi
+
+            echo "Editing PR $PR_NUMBER..."
+            curl \
+              -sX POST \
+              "$REPO_URL/pulls/$PR_NUMBER" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -d "{ \"body\": \"$PR_BODY\\nCloses #$ISSUE_NUMBER, \" }"
+
             exit 1
           fi
