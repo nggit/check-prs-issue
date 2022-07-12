@@ -37,9 +37,9 @@ jobs:
           done
 
           if [ -n "$issue_found" ]; then
-            echo "OK: PR $PR_NUMBER is referenced to an open issue: $issue_found"
+            echo "OK: An open issue ($issue_found) is referenced in your PR ($PR_NUMBER)"
           else
-            echo "Failed: PR $PR_NUMBER is not referenced to an open issue" >&2
+            echo "Failed: No open issues referenced in your PR ($PR_NUMBER)" >&2
             echo "Creating an issue..."
 
             create_issue="$( curl \
@@ -47,7 +47,7 @@ jobs:
               "$REPO_URL/issues" \
               -H "Content-Type: application/json" \
               -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{ \"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because PR #$PR_NUMBER is not referenced to an open issue.\" }" \
+              -d "{ \"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because no open issues referenced in your PR (#$PR_NUMBER).\" }" \
             )"
 
             if [ -n "$create_issue" ]; then
@@ -69,7 +69,7 @@ jobs:
               "$PR_COMMENTS_URL" \
               -H "Content-Type: application/json" \
               -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{ \"body\": \"Error: Hi @$PR_USER, please reference your PR ($PR_NUMBER) to an open issue. You can fix this by editing your PR body (comments).\
+              -d "{ \"body\": \"Error: Hi @$PR_USER, please reference at least an open issue in your PR ($PR_NUMBER). You can fix this by editing your PR body (comments).\
               \\nI opened an issue #$ISSUE_NUMBER because of this and you should reference it too.\" }"
 
             if [ -n "$PR_BODY" ]; then
