@@ -47,7 +47,7 @@ jobs:
               "$REPO_URL/issues" \
               -H "Content-Type: application/json" \
               -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{ \"title\": \"[PR by $PR_USER] $PR_TITLE\", \"body\": \"This issue was created because no open issues referenced in your PR (#$PR_NUMBER).\" }" \
+              -d "{ \"title\": \"$PR_TITLE\", \"body\": \"This issue was created because no open issues referenced in your PR (#$PR_NUMBER).\" }" \
             )"
 
             if [ -n "$create_issue" ]; then
