@@ -13,22 +13,32 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt-get update
+          sudo apt-get -y install gh
       - name: Add a comment to a PR and create an issue if the PR does not reference an open issue
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_USER: ${{ github.event.pull_request.user.login }}
-          PR_COMMENTS_URL: ${{ github.event.pull_request.comments_url }}
-          REPO_URL: ${{ github.event.pull_request.base.repo.url }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_FULL_NAME: ${{ github.event.pull_request.base.repo.full_name }}
+          WORKFLOW_TOKEN: ${{ secrets.NGGIT_TEST_TOKEN }}
         run: |
+          git config --global user.name "nggit-test"
+          git config --global user.email "108911422+nggit-test@users.noreply.github.com"
+          echo "$WORKFLOW_TOKEN" | gh auth login --with-token
+
           issue_found=""
 
           for issue in $( echo "$PR_TITLE $PR_BODY" | grep -o '#[0-9][0-9]*' ); do
-            check_issue="$( curl -sH "Authorization: token $GITHUB_TOKEN" "$REPO_URL/issues/${issue#"#"}" )"
-
-            if [ -n "$check_issue" ] && [ "$( echo "$check_issue" | python3 -c "import sys, json; data = json.load(sys.stdin); print(
+            if check_issue="$( gh api "repos/$REPO_FULL_NAME/issues/${issue#"#"}" )" \
+                && [ "$( echo "$check_issue" | python3 -c "import sys, json; data = json.load(sys.stdin); print(
                   'node_id' in data and 'state' in data and data['node_id'].find('I_') == 0 and data['state'] == 'open'
                 )" )" = "True" ]; then
               issue_found="$issue"
@@ -42,21 +52,13 @@ jobs:
             echo "Failed: No open issues referenced in your PR ($PR_NUMBER)" >&2
             echo "Creating an issue..."
 
-            create_issue="$( curl \
-              -sX POST \
-              "$REPO_URL/issues" \
-              -H "Content-Type: application/json" \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{ \"title\": \"$PR_TITLE\", \"body\": \"This issue was created because no open issues referenced in your PR (#$PR_NUMBER).\" }" \
-            )"
-
-            if [ -n "$create_issue" ]; then
-              ISSUE_NUMBER="$( echo "$create_issue" | python3 -c "import sys, json; data = json.load(sys.stdin); 'number' in data and print(
-                data['number']
-              )" )"
-            fi
-
-            if [ -n "$ISSUE_NUMBER" ]; then
+            if ISSUE_NUMBER="$( echo "{ \"title\": \"$PR_TITLE\", \"body\": \"This issue was created because no open issues referenced in your PR (#$PR_NUMBER).\" }" \
+                | gh api "repos/$REPO_FULL_NAME/issues" \
+                -X POST \
+                -H "Content-Type: application/json" \
+                --input - \
+                --jq '.number'
+            )"; then
               echo "Issue number $ISSUE_NUMBER created"
             else
               echo "Error: Failed to create an issue" >&2
@@ -64,13 +66,11 @@ jobs:
             fi
 
             echo "Creating a comment..."
-            curl \
-              -sX POST \
-              "$PR_COMMENTS_URL" \
-              -H "Content-Type: application/json" \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{ \"body\": \"Error: Hi @$PR_USER, please reference at least an open issue in your PR ($PR_NUMBER). You can fix this by editing your PR body (comments).\
-              \\nI opened an issue #$ISSUE_NUMBER because of this and you should reference it too.\" }"
+            printf "%b" "Error: Hi @$PR_USER, please reference at least an open issue in your PR ($PR_NUMBER). You can fix this by editing your PR body (comments).\
+              \nI opened an issue #$ISSUE_NUMBER because of this and you should reference it too." \
+              | gh issue comment "$PR_NUMBER" \
+              --body-file - \
+              --repo "$REPO_FULL_NAME"
 
             if [ -n "$PR_BODY" ]; then
               PR_BODY="$( printf "%s" "$PR_BODY" | python3 -c "import sys, json; print(json.dumps(sys.stdin.read())[1:-1])" )"
@@ -79,12 +79,9 @@ jobs:
             fi
 
             echo "Editing PR $PR_NUMBER..."
-            curl \
-              -sX POST \
-              "$REPO_URL/pulls/$PR_NUMBER" \
-              -H "Content-Type: application/json" \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -d "{ \"body\": \"$PR_BODY\\nCloses #$ISSUE_NUMBER, \" }"
+            printf "%b" "$PR_BODY\nCloses #$ISSUE_NUMBER, " | gh pr edit "$PR_NUMBER" \
+              --body-file - \
+              --repo "$REPO_FULL_NAME"
 
             exit 1
           fi
